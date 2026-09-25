@@ -15,6 +15,9 @@ RUN apt-get update \
 # ping via unprivileged ICMP sockets (pod sysctl net.ipv4.ping_group_range), not
 # cap_net_raw: runtimes that drop NET_RAW refuse to even exec a binary carrying it.
  && setcap -r /usr/bin/ping
+# apt's hook pokes PackageKit over the system bus after every install; D-Bus can't
+# start it in a container, so `sudo apt install` ended in a (harmless) error.
+ && rm /etc/apt/apt.conf.d/20packagekit
 
 # Official release, not the distro package (which lags), checked against its SHA256SUMS.
 RUN cd /tmp \
