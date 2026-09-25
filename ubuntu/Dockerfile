@@ -5,6 +5,10 @@ FROM lscr.io/linuxserver/webtop:ubuntu-xfce-621de5cf-ls1
 
 ARG RCLONE_VERSION=1.75.1
 
+# setcap -r: ping uses unprivileged ICMP sockets (pod sysctl net.ipv4.ping_group_range),
+#   not cap_net_raw — runtimes that drop NET_RAW refuse to even exec a binary carrying it.
+# rm 20packagekit: apt's hook pokes PackageKit over the system bus after every install;
+#   D-Bus can't start it in a container, so `sudo apt install` ended in a (harmless) error.
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       ca-certificates curl wget git openssh-client \
@@ -12,11 +16,7 @@ RUN apt-get update \
       vim nano jq less htop procps zip unzip \
       dnsutils iputils-ping iproute2 netcat-openbsd traceroute \
  && rm -rf /var/lib/apt/lists/* \
-# ping via unprivileged ICMP sockets (pod sysctl net.ipv4.ping_group_range), not
-# cap_net_raw: runtimes that drop NET_RAW refuse to even exec a binary carrying it.
- && setcap -r /usr/bin/ping
-# apt's hook pokes PackageKit over the system bus after every install; D-Bus can't
-# start it in a container, so `sudo apt install` ended in a (harmless) error.
+ && setcap -r /usr/bin/ping \
  && rm /etc/apt/apt.conf.d/20packagekit
 
 # Official release, not the distro package (which lags), checked against its SHA256SUMS.
@@ -37,3 +37,9 @@ RUN printf '%s\n' '#!/bin/sh' \
       'echo "bwrap: No permissions to create a new namespace, likely because the kernel does not allow non-privileged user namespaces." >&2' \
       'exit 1' > /usr/bin/bwrap \
  && chmod 755 /usr/bin/bwrap
+
+# The base puts Selkies' private venv (/lsiopy) first on PATH, so in a terminal
+# python3/pip were Selkies' own — and `sudo pip install` could break the desktop
+# stream. Interactive shells get the system python3/pip; services keep their PATH.
+RUN printf '%s\n' '' '# linux-box: system python for interactive shells, not Selkies'"'"' venv' \
+      'PATH=$(printf %s "$PATH" | sed "s#/lsiopy/bin:##g"); unset VIRTUAL_ENV' >> /etc/bash.bashrc
