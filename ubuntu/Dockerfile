@@ -1,6 +1,6 @@
 # Ubuntu 26.04 + XFCE in the browser (Selkies, websocket on :3000). Chromium,
 # xfce4-terminal and mousepad come with the base. s6 init runs as root and drops
-# to `abc` (PUID/PGID); $HOME is /home/abc (ephemeral).
+# to `abc` (PUID/PGID); $HOME is /home/abc (the PVC).
 FROM lscr.io/linuxserver/webtop:ubuntu-xfce-621de5cf-ls1
 
 ARG RCLONE_VERSION=1.75.1
@@ -44,13 +44,18 @@ RUN printf '%s\n' '#!/bin/sh' \
 RUN printf '%s\n' '' '# linux-box: system python for interactive shells, not Selkies'"'"' venv' \
       'PATH=$(printf %s "$PATH" | sed "s#/lsiopy/bin:##g"); unset VIRTUAL_ENV' >> /etc/bash.bashrc
 
-# A normal /home/$USER home, in the container itself: the box is disposable, so
-# a restart wipes it. /config is left to the base's own state (nginx cert,
-# crontabs). The base only chowns /config at boot, so a root init script hands
-# the home to abc once PUID/PGID are applied.
+# A normal /home/$USER home; the chart mounts the PVC there. /config is left to
+# the base's own state (nginx cert, crontabs). init-home runs after PUID/PGID are
+# applied and before init-selkies-config writes into $HOME: it seeds a fresh
+# volume from /etc/skel (never overwriting) and hands the home to abc.
 ENV HOME=/home/abc
 RUN usermod -d /home/abc abc \
- && cp -rT /etc/skel /home/abc \
- && mkdir /custom-cont-init.d \
- && printf '%s\n' '#!/bin/sh' 'chown -R abc:abc /home/abc' > /custom-cont-init.d/10-home \
- && chmod 755 /custom-cont-init.d/10-home
+ && mkdir /home/abc \
+ && d=/etc/s6-overlay/s6-rc.d \
+ && mkdir -p $d/init-home/dependencies.d \
+ && touch $d/init-home/dependencies.d/init-adduser $d/user/contents.d/init-home \
+      $d/init-selkies-config/dependencies.d/init-home \
+ && echo oneshot > $d/init-home/type \
+ && echo $d/init-home/run > $d/init-home/up \
+ && printf '%s\n' '#!/bin/sh' 'cp -rn /etc/skel/. /home/abc' 'chown -R abc:abc /home/abc' > $d/init-home/run \
+ && chmod 755 $d/init-home/run
