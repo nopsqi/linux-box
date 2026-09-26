@@ -1,6 +1,6 @@
 # Ubuntu 26.04 + XFCE in the browser (Selkies, websocket on :3000). Chromium,
 # xfce4-terminal and mousepad come with the base. s6 init runs as root and drops
-# to `abc` (PUID/PGID); $HOME is /config — the PVC.
+# to `abc` (PUID/PGID); $HOME is /home/abc (ephemeral).
 FROM lscr.io/linuxserver/webtop:ubuntu-xfce-621de5cf-ls1
 
 ARG RCLONE_VERSION=1.75.1
@@ -43,3 +43,14 @@ RUN printf '%s\n' '#!/bin/sh' \
 # stream. Interactive shells get the system python3/pip; services keep their PATH.
 RUN printf '%s\n' '' '# linux-box: system python for interactive shells, not Selkies'"'"' venv' \
       'PATH=$(printf %s "$PATH" | sed "s#/lsiopy/bin:##g"); unset VIRTUAL_ENV' >> /etc/bash.bashrc
+
+# A normal /home/$USER home, in the container itself: the box is disposable, so
+# a restart wipes it. /config is left to the base's own state (nginx cert,
+# crontabs). The base only chowns /config at boot, so a root init script hands
+# the home to abc once PUID/PGID are applied.
+ENV HOME=/home/abc
+RUN usermod -d /home/abc abc \
+ && cp -rT /etc/skel /home/abc \
+ && mkdir /custom-cont-init.d \
+ && printf '%s\n' '#!/bin/sh' 'chown -R abc:abc /home/abc' > /custom-cont-init.d/10-home \
+ && chmod 755 /custom-cont-init.d/10-home
