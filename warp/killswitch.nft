@@ -6,6 +6,9 @@ delete table inet killswitch
 table inet killswitch {
   chain out {
     type filter hook output priority 0; policy drop;
+    # replies to inbound (kubelet probes from the node, cloudflared); a new
+    # outbound connection is still judged by the rules below
+    ct state established,related accept
     oifname { "lo", "CloudflareWARP" } accept
     # WARP's own tunnel packets
     meta mark 0x100cf accept
