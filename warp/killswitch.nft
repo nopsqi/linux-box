@@ -1,0 +1,20 @@
+# Pod-wide egress allowlist. It lives in the pod's network namespace, not in
+# warp-svc, so if WARP dies the box goes offline instead of out via the node's IP.
+# Without it WARP fails open (tested 2026-09-29).
+table inet killswitch
+delete table inet killswitch
+table inet killswitch {
+  chain out {
+    type filter hook output priority 0; policy drop;
+    oifname { "lo", "CloudflareWARP" } accept
+    # WARP's own tunnel packets
+    meta mark 0x100cf accept
+    # pods and services (CoreDNS, cloudflared); Calico still decides which
+    ip daddr 10.0.0.0/8 accept
+    # warp-svc before the tunnel is up: the WARP edge, plus the API and
+    # connectivity checks (api/engage/connectivity.cloudflareclient.com) as
+    # resolved 2026-09-29. If Cloudflare moves them WARP can't reconnect: the
+    # box goes offline, it doesn't leak.
+    ip daddr { 162.159.192.0/20, 162.159.137.65, 162.159.138.65, 104.16.24.84, 104.16.192.82 } accept
+  }
+}

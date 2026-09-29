@@ -8,12 +8,13 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  DISTRO: ubuntu
-  IMAGE_NAME: ${{ github.repository }}-ubuntu # env can't reference DISTRO in the same block
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [ubuntu, warp] # a directory each; warp is the box's WARP sidecar
     permissions:
       contents: read
       packages: write
@@ -44,7 +45,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.image }}
           tags: |
             type=sha
 
@@ -52,12 +53,12 @@ jobs:
         id: build-and-push
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
-          context: ${{ env.DISTRO }}
+          context: ${{ matrix.image }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
       - name: Sign the published Docker image
         if: ${{ github.event_name != 'pull_request' }}
@@ -70,6 +71,9 @@ jobs:
   helm:
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [ubuntu, warp] # a directory each; warp is the box's WARP sidecar
     if: github.event_name != 'pull_request'
     steps:
       - name: Checkout homelab
@@ -82,15 +86,15 @@ jobs:
         run: echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)" >> $GITHUB_ENV
       - name: Update prod tag
         run: |
-          sed -i "s/tag:.*/tag: sha-${{ env.SHORT_SHA }}/" homelab/helm/linux-box/values.${{ env.DISTRO }}.prod.yaml
+          sed -i "s/tag:.*/tag: sha-${{ env.SHORT_SHA }}/" homelab/helm/linux-box/values.${{ matrix.image }}.prod.yaml
       - name: Open prod promotion PR
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.HOMELAB_TOKEN }}
           path: homelab
-          branch: promote/linux-box-${{ env.DISTRO }}-sha-${{ env.SHORT_SHA }}
-          title: "promote: linux-box-${{ env.DISTRO }} sha-${{ env.SHORT_SHA }}"
-          body: Promote linux-box-${{ env.DISTRO }} image sha-${{ env.SHORT_SHA }} to production.
-          commit-message: "ci: update linux-box-${{ env.DISTRO }} prod image tag to sha-${{ env.SHORT_SHA }}"
+          branch: promote/linux-box-${{ matrix.image }}-sha-${{ env.SHORT_SHA }}
+          title: "promote: linux-box-${{ matrix.image }} sha-${{ env.SHORT_SHA }}"
+          body: Promote linux-box-${{ matrix.image }} image sha-${{ env.SHORT_SHA }} to production.
+          commit-message: "ci: update linux-box-${{ matrix.image }} prod image tag to sha-${{ env.SHORT_SHA }}"
           add-paths: |
-            helm/linux-box/values.${{ env.DISTRO }}.prod.yaml
+            helm/linux-box/values.${{ matrix.image }}.prod.yaml
