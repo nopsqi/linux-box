@@ -85,16 +85,23 @@ jobs:
       - name: Set SHORT_SHA
         run: echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)" >> $GITHUB_ENV
       - name: Update prod tag
+      - name: Update image tags (staging live now, prod after promotion)
         run: |
           sed -i "s/tag:.*/tag: sha-${{ env.SHORT_SHA }}/" homelab/helm/linux-box/values.${{ matrix.image }}.prod.yaml
-      - name: Open prod promotion PR
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.HOMELAB_TOKEN }}
-          path: homelab
-          branch: promote/linux-box-${{ matrix.image }}-sha-${{ env.SHORT_SHA }}
-          title: "promote: linux-box-${{ matrix.image }} sha-${{ env.SHORT_SHA }}"
-          body: Promote linux-box-${{ matrix.image }} image sha-${{ env.SHORT_SHA }} to production.
-          commit-message: "ci: update linux-box-${{ matrix.image }} prod image tag to sha-${{ env.SHORT_SHA }}"
-          add-paths: |
-            helm/linux-box/values.${{ matrix.image }}.prod.yaml
+      - name: Commit and push to master
+        working-directory: homelab
+        run: |
+          git config user.name "github-action"
+          git config user.email "github-action@github.com"
+          git add helm/linux-box/values.${{ matrix.image }}.prod.yaml
+          git diff --cached --quiet || git commit -m "ci: linux-box-${{ matrix.image }} image sha-${{ env.SHORT_SHA }}"
+          git pull --rebase origin master
+          git push
+      - name: Open promotion PR (master -> prod) if none is open
+        working-directory: homelab
+        env:
+          GH_TOKEN: ${{ secrets.HOMELAB_TOKEN }}
+        run: |
+          gh pr create --base prod --head master --title "promote: master -> prod" \
+            --body "Promote everything verified on staging (master) to production (prod branch)." \
+            || echo "promotion PR already open"
