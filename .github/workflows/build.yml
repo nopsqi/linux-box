@@ -13,6 +13,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 1
+      fail-fast: false
       matrix:
         image: [ubuntu, warp] # a directory each; warp is the box's WARP sidecar
     permissions:
@@ -72,6 +74,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 1
+      fail-fast: false
       matrix:
         image: [ubuntu, warp] # a directory each; warp is the box's WARP sidecar
     if: github.event_name != 'pull_request'
@@ -94,8 +98,7 @@ jobs:
           git config user.email "github-action@github.com"
           git add helm/linux-box/values.${{ matrix.image }}.prod.yaml
           git diff --cached --quiet || git commit -m "ci: linux-box-${{ matrix.image }} image sha-${{ env.SHORT_SHA }}"
-          git pull --rebase origin master
-          git push
+          for i in 1 2 3; do git pull --rebase origin master && git push && break; echo "push raced, retry $i"; sleep $((i*5)); done
       - name: Open promotion PR (master -> prod) if none is open
         working-directory: homelab
         env:
