@@ -84,7 +84,6 @@ jobs:
           path: homelab
       - name: Set SHORT_SHA
         run: echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)" >> $GITHUB_ENV
-      - name: Update prod tag
       - name: Update image tags (staging live now, prod after promotion)
         run: |
           sed -i "s/tag:.*/tag: sha-${{ env.SHORT_SHA }}/" homelab/helm/linux-box/values.${{ matrix.image }}.prod.yaml
