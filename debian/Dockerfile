@@ -44,3 +44,10 @@ RUN usermod -d /home/abc abc \
  && echo $d/init-home/run > $d/init-home/up \
  && printf '%s\n' '#!/bin/sh' 'cp -rn /etc/skel/. /home/abc' 'chown -R abc:abc /home/abc' > $d/init-home/run \
  && chmod 755 $d/init-home/run
+
+# Ad blocker forced on: ad-heavy pages (speedtest.net) alone filled 1.3GB of
+# Chromium memory in the box. A managed policy survives restarts and fresh homes.
+# Extension: uBlock Origin Lite (Raymond Hill), from the Chrome Web Store.
+RUN mkdir -p /etc/chromium/policies/managed \
+ && printf '%s\n' '{"ExtensionInstallForcelist": ["ddkjiahejlhfcafbddmgiahcphecmpfh;https://clients2.google.com/service/update2/crx"]}' \
+      > /etc/chromium/policies/managed/linux-box.json
